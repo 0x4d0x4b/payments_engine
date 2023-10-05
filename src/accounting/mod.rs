@@ -1,10 +1,12 @@
+use crate::accounting::executable_tx::{ExecutableTransaction, TxError};
 use crate::core_types::{ClientId, TxId};
 use rust_decimal::Decimal;
 use serde::Serialize;
+use std::collections::hash_map::Iter;
 use std::collections::HashMap;
 
 mod executable_tx;
-mod transactions;
+pub mod transactions;
 
 struct SubAccount {
     balance: Decimal,
@@ -18,7 +20,7 @@ impl SubAccount {
     }
 }
 
-struct UserAccount {
+pub struct UserAccount {
     client_id: ClientId,
     available: SubAccount,
     held: SubAccount,
@@ -41,7 +43,7 @@ impl UserAccount {
 }
 
 #[derive(Serialize)]
-struct AccountLog {
+pub struct AccountLog {
     #[serde(rename = "client")]
     client_id: ClientId,
     available: Decimal,
@@ -50,8 +52,8 @@ struct AccountLog {
     locked: bool,
 }
 
-impl From<UserAccount> for AccountLog {
-    fn from(user_account: UserAccount) -> Self {
+impl From<&UserAccount> for AccountLog {
+    fn from(user_account: &UserAccount) -> Self {
         let total = user_account.total();
         AccountLog {
             client_id: user_account.client_id,
@@ -101,6 +103,14 @@ impl Ledger {
             accounts: HashMap::new(),
             deposit_states: HashMap::new(),
         }
+    }
+
+    pub fn execute(&mut self, tx: &impl ExecutableTransaction) -> Result<(), TxError> {
+        tx.execute_tx(self)
+    }
+
+    pub fn accounts_iter(&self) -> Iter<ClientId, UserAccount> {
+        self.accounts.iter()
     }
 }
 

@@ -46,6 +46,9 @@ impl ExecutableTransaction for Deposit {
             .accounts
             .entry(self.client_id)
             .or_insert(UserAccount::new(self.client_id));
+        if client_account.locked {
+            return Err(TxError::ClientAccountLocked);
+        }
         make_tx(
             &mut ledger.liabilities,
             &mut client_account.available,
