@@ -1,6 +1,7 @@
 use crate::accounting::Ledger;
 use enum_dispatch::enum_dispatch;
 
+#[derive(Debug, PartialEq)]
 pub enum TxError {
     ClientAccountLocked,
     InsufficientFunds,

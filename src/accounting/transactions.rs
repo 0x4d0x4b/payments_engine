@@ -40,6 +40,16 @@ pub struct Deposit {
     amount: Decimal,
 }
 
+impl Deposit {
+    pub fn new(client_id: ClientId, tx_id: TxId, amount: Decimal) -> Self {
+        Self {
+            client_id,
+            tx_id,
+            amount,
+        }
+    }
+}
+
 impl ExecutableTransaction for Deposit {
     fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
         let client_account = ledger
@@ -69,6 +79,16 @@ pub struct Withdrawal {
     amount: Decimal,
 }
 
+impl Withdrawal {
+    pub fn new(client_id: ClientId, tx_id: TxId, amount: Decimal) -> Self {
+        Self {
+            client_id,
+            tx_id,
+            amount,
+        }
+    }
+}
+
 impl ExecutableTransaction for Withdrawal {
     fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
         if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
@@ -94,6 +114,12 @@ impl ExecutableTransaction for Withdrawal {
 pub struct Dispute {
     client_id: ClientId,
     tx_id: TxId,
+}
+
+impl Dispute {
+    pub fn new(client_id: ClientId, tx_id: TxId) -> Self {
+        Self { client_id, tx_id }
+    }
 }
 
 impl ExecutableTransaction for Dispute {
@@ -131,6 +157,12 @@ pub struct Resolve {
     tx_id: TxId,
 }
 
+impl Resolve {
+    pub fn new(client_id: ClientId, tx_id: TxId) -> Self {
+        Self { client_id, tx_id }
+    }
+}
+
 impl ExecutableTransaction for Resolve {
     fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
         if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
@@ -164,6 +196,12 @@ impl ExecutableTransaction for Resolve {
 pub struct Chargeback {
     client_id: ClientId,
     tx_id: TxId,
+}
+
+impl Chargeback {
+    pub fn new(client_id: ClientId, tx_id: TxId) -> Self {
+        Self { client_id, tx_id }
+    }
 }
 
 impl ExecutableTransaction for Chargeback {
