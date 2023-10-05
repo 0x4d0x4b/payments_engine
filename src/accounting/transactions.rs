@@ -1,4 +1,7 @@
+use crate::accounting::executable_tx::{ExecutableTransaction, TxError};
+use crate::accounting::{make_tx, DepositState, Ledger, TxState, UserAccount};
 use crate::core_types::{ClientId, TxId};
+use enum_dispatch::enum_dispatch;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
@@ -20,13 +23,14 @@ pub struct TransactionLog {
     amount: Option<Decimal>,
 }
 
+#[enum_dispatch(ExecutableTransaction)]
 #[derive(Debug, PartialEq)]
 pub enum Transaction {
-    Deposit(Deposit),
-    Withdrawal(Withdrawal),
-    Dispute(Dispute),
-    Resolve(Resolve),
-    Chargeback(Chargeback),
+    Deposit,
+    Withdrawal,
+    Dispute,
+    Resolve,
+    Chargeback,
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,11 +40,51 @@ pub struct Deposit {
     amount: Decimal,
 }
 
+impl ExecutableTransaction for Deposit {
+    fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
+        let client_account = ledger
+            .accounts
+            .entry(self.client_id)
+            .or_insert(UserAccount::new(self.client_id));
+        make_tx(
+            &mut ledger.liabilities,
+            &mut client_account.available,
+            self.amount,
+        );
+        ledger.deposit_states.insert(
+            self.tx_id,
+            DepositState::new(self.client_id, self.tx_id, self.amount),
+        );
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Withdrawal {
     client_id: ClientId,
     tx_id: TxId,
     amount: Decimal,
+}
+
+impl ExecutableTransaction for Withdrawal {
+    fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
+        if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
+            if client_account.locked {
+                return Err(TxError::ClientAccountLocked);
+            }
+            if client_account.available.balance < self.amount {
+                return Err(TxError::InsufficientFunds);
+            }
+            make_tx(
+                &mut client_account.available,
+                &mut ledger.liabilities,
+                self.amount,
+            );
+            Ok(())
+        } else {
+            Err(TxError::ClientAccountNotFound)
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,16 +93,104 @@ pub struct Dispute {
     tx_id: TxId,
 }
 
+impl ExecutableTransaction for Dispute {
+    fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
+        if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
+            if client_account.locked {
+                return Err(TxError::ClientAccountLocked);
+            }
+            if let Some(deposit) = ledger.deposit_states.get_mut(&self.tx_id) {
+                if deposit.tx_id != self.tx_id || deposit.client_id != self.client_id {
+                    return Err(TxError::OriginTxNotFound);
+                }
+                if deposit.state != TxState::Resolved {
+                    return Err(TxError::TxAlreadyDisputed);
+                }
+                deposit.state = TxState::Disputed;
+                make_tx(
+                    &mut client_account.available,
+                    &mut client_account.held,
+                    deposit.amount,
+                );
+                Ok(())
+            } else {
+                Err(TxError::OriginTxNotFound)
+            }
+        } else {
+            Err(TxError::ClientAccountNotFound)
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Resolve {
     client_id: ClientId,
     tx_id: TxId,
 }
 
+impl ExecutableTransaction for Resolve {
+    fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
+        if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
+            if client_account.locked {
+                return Err(TxError::ClientAccountLocked);
+            }
+            if let Some(deposit) = ledger.deposit_states.get_mut(&self.tx_id) {
+                if deposit.tx_id != self.tx_id || deposit.client_id != self.client_id {
+                    return Err(TxError::OriginTxNotFound);
+                }
+                if deposit.state != TxState::Disputed {
+                    return Err(TxError::TxNotDisputed);
+                }
+                deposit.state = TxState::Resolved;
+                make_tx(
+                    &mut client_account.held,
+                    &mut client_account.available,
+                    deposit.amount,
+                );
+                Ok(())
+            } else {
+                Err(TxError::OriginTxNotFound)
+            }
+        } else {
+            Err(TxError::ClientAccountNotFound)
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Chargeback {
     client_id: ClientId,
     tx_id: TxId,
+}
+
+impl ExecutableTransaction for Chargeback {
+    fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
+        if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
+            if client_account.locked {
+                return Err(TxError::ClientAccountLocked);
+            }
+            if let Some(deposit) = ledger.deposit_states.get_mut(&self.tx_id) {
+                if deposit.tx_id != self.tx_id || deposit.client_id != self.client_id {
+                    return Err(TxError::OriginTxNotFound);
+                }
+                if deposit.state != TxState::Disputed {
+                    return Err(TxError::TxNotDisputed);
+                }
+                deposit.state = TxState::ChargedBack;
+                client_account.locked = true;
+                make_tx(
+                    &mut client_account.held,
+                    &mut ledger.liabilities,
+                    deposit.amount,
+                );
+                Ok(())
+            } else {
+                Err(TxError::OriginTxNotFound)
+            }
+        } else {
+            Err(TxError::ClientAccountNotFound)
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
