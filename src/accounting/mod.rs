@@ -502,7 +502,7 @@ mod tests {
         assert!(ledger
             .execute(&Transaction::Dispute(Dispute::new(2, 4)))
             .is_ok());
-        verify_balances(&ledger, 1, dec!(30.0), dec!(00.0));
+        verify_balances(&ledger, 1, dec!(30.0), dec!(0.0));
         verify_balances(&ledger, 2, dec!(-20.0), dec!(60.0));
         verify_liabilities(&ledger, dec!(-70.0));
 
@@ -517,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn no_ops_after_chargeback() {
+    fn ops_after_chargeback() {
         let mut ledger = Ledger::new();
         assert!(ledger
             .execute(&Transaction::Deposit(Deposit::new(1, 1, dec!(50.0))))
@@ -550,40 +550,72 @@ mod tests {
         verify_liabilities(&ledger, dec!(-30.0));
         verify_account_locked(&ledger, 1);
 
-        assert_eq!(
-            ledger.execute(&Transaction::Deposit(Deposit::new(1, 4, dec!(40.0)))),
-            Err(TxError::ClientAccountLocked)
-        );
-        verify_balances(&ledger, 1, dec!(30.0), dec!(0.0));
-        verify_liabilities(&ledger, dec!(-30.0));
+        assert!(ledger
+            .execute(&Transaction::Deposit(Deposit::new(1, 4, dec!(40.0))))
+            .is_ok());
+        verify_balances(&ledger, 1, dec!(70.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
 
         assert_eq!(
             ledger.execute(&Transaction::Withdrawal(Withdrawal::new(1, 5, dec!(40.0)))),
             Err(TxError::ClientAccountLocked)
         );
-        verify_balances(&ledger, 1, dec!(30.0), dec!(0.0));
-        verify_liabilities(&ledger, dec!(-30.0));
+        verify_balances(&ledger, 1, dec!(70.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
 
         assert_eq!(
             ledger.execute(&Transaction::Dispute(Dispute::new(1, 2))),
-            Err(TxError::ClientAccountLocked)
+            Err(TxError::TxAlreadyDisputed)
         );
-        verify_balances(&ledger, 1, dec!(30.0), dec!(0.0));
-        verify_liabilities(&ledger, dec!(-30.0));
+        verify_balances(&ledger, 1, dec!(70.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
 
         assert_eq!(
             ledger.execute(&Transaction::Resolve(Resolve::new(1, 2))),
-            Err(TxError::ClientAccountLocked)
+            Err(TxError::TxNotDisputed)
         );
-        verify_balances(&ledger, 1, dec!(30.0), dec!(0.0));
-        verify_liabilities(&ledger, dec!(-30.0));
+        verify_balances(&ledger, 1, dec!(70.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
 
         assert_eq!(
             ledger.execute(&Transaction::Chargeback(Chargeback::new(1, 2))),
-            Err(TxError::ClientAccountLocked)
+            Err(TxError::TxNotDisputed)
         );
-        verify_balances(&ledger, 1, dec!(30.0), dec!(0.0));
-        verify_liabilities(&ledger, dec!(-30.0));
+        verify_balances(&ledger, 1, dec!(70.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
+
+        assert!(ledger
+            .execute(&Transaction::Dispute(Dispute::new(1, 1)))
+            .is_ok());
+        verify_balances(&ledger, 1, dec!(20.0), dec!(50.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
+
+        assert!(ledger
+            .execute(&Transaction::Resolve(Resolve::new(1, 1)))
+            .is_ok());
+        verify_balances(&ledger, 1, dec!(70.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
+
+        assert!(ledger
+            .execute(&Transaction::Dispute(Dispute::new(1, 1)))
+            .is_ok());
+        verify_balances(&ledger, 1, dec!(20.0), dec!(50.0));
+        verify_liabilities(&ledger, dec!(-70.0));
+        verify_account_locked(&ledger, 1);
+
+        assert!(ledger
+            .execute(&Transaction::Chargeback(Chargeback::new(1, 1)))
+            .is_ok());
+        verify_balances(&ledger, 1, dec!(20.0), dec!(0.0));
+        verify_liabilities(&ledger, dec!(-20.0));
+        verify_account_locked(&ledger, 1);
     }
 
     #[test]

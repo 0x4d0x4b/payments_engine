@@ -56,9 +56,6 @@ impl ExecutableTransaction for Deposit {
             .accounts
             .entry(self.client_id)
             .or_insert(UserAccount::new(self.client_id));
-        if client_account.locked {
-            return Err(TxError::ClientAccountLocked);
-        }
         make_tx(
             &mut ledger.liabilities,
             &mut client_account.available,
@@ -125,9 +122,6 @@ impl Dispute {
 impl ExecutableTransaction for Dispute {
     fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
         if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
-            if client_account.locked {
-                return Err(TxError::ClientAccountLocked);
-            }
             if let Some(deposit) = ledger.deposit_states.get_mut(&self.tx_id) {
                 if deposit.tx_id != self.tx_id || deposit.client_id != self.client_id {
                     return Err(TxError::OriginTxNotFound);
@@ -166,9 +160,6 @@ impl Resolve {
 impl ExecutableTransaction for Resolve {
     fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
         if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
-            if client_account.locked {
-                return Err(TxError::ClientAccountLocked);
-            }
             if let Some(deposit) = ledger.deposit_states.get_mut(&self.tx_id) {
                 if deposit.tx_id != self.tx_id || deposit.client_id != self.client_id {
                     return Err(TxError::OriginTxNotFound);
@@ -207,9 +198,6 @@ impl Chargeback {
 impl ExecutableTransaction for Chargeback {
     fn execute_tx(&self, ledger: &mut Ledger) -> Result<(), TxError> {
         if let Some(client_account) = ledger.accounts.get_mut(&self.client_id) {
-            if client_account.locked {
-                return Err(TxError::ClientAccountLocked);
-            }
             if let Some(deposit) = ledger.deposit_states.get_mut(&self.tx_id) {
                 if deposit.tx_id != self.tx_id || deposit.client_id != self.client_id {
                     return Err(TxError::OriginTxNotFound);
